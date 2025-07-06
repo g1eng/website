@@ -9,22 +9,22 @@ min-kubernetes-server-version: v1.22
 
 {{< feature-state for_k8s_version="v1.19" state="stable" >}}
 
-seccompとはセキュアコンピューティングモードのことで、Linuxカーネル2.7.12以降の機能です。
+seccomp(SECure COMputing mode)はLinuxカーネル2.7.12以降の機能です。
 ユーザー空間からカーネルに対して発行できるシステムコールを制限することにより、プロセス権限のサンドボックスを構築することができます。
-Kubernetesではノードが読み込んだseccompプロフィールをPodやコンテナに対して自動で適用することができます。
+Kubernetesではノード上で読み込んだseccompプロファイルを、Podやコンテナに対して自動で適用することができます。
 
-あなたのワークロードで必要とされる権限を特定することは、難しいことかもしれません。
-このチュートリアルでは、まずローカルのKubernetesクラスターでseccompプロフィールを読み込むための方法を説明し、seccompプロフィールのPodへの適用方法について学んだ上で、コンテナプロセスに対して必要な権限のみを付与するためのseccompプロフィールを作成する方法を概観します。
+あなたのワークロードに必要な権限を特定することは、難しいことかもしれません。
+このチュートリアルでは、まずローカルのKubernetesクラスターでseccompプロファイルを読み込むための方法を説明し、seccompプロファイルのPodへの適用方法について学んだ上で、コンテナプロセスに対して必要な権限のみを付与するためのseccompプロファイルを作成する方法を概観していきます。
 
 ## {{% heading "objectives" %}}  
 
-* ノードにseccompプロフィールを読み込む方法を学ぶ
-* seccompプロフィールをコンテナに適用する方法を学ぶ
+* ノードでseccompプロファイルを読み込む方法を学ぶ
+* seccompプロファイルをコンテナに適用する方法を学ぶ
 * コンテナプロセスが生成するシステムコールの監査出力を確認する
-* 存在しないプロフィールが指定された時の挙動を確認する
-* seccompプロフィールの侵害を観測する
-* きめ細やかなseccompプロフィールの作成方法を学ぶ
-* コンテナランタイムのデフォルトseccompプロフィールの適用方法を学ぶ
+* 存在しないプロファイルが指定された時の挙動を確認する
+* seccompプロファイルの侵害を観測する
+* きめ細やかなseccompプロファイルの作成方法を学ぶ
+* コンテナランタイムのデフォルトseccompプロファイルの適用方法を学ぶ
 
 ## {{% heading "prerequisites" %}} 
 
@@ -41,15 +41,15 @@ Kubernetesではノードが読み込んだseccompプロフィールをPodやコ
 この手順は、ほかの好きなツールを用いて実施してもかまいません。
 
 {{< note >}}
-Containerの`securityContext`に`privileged: true`が設定されているコンテナでは、seccompプロフィールを適用することができません。
+Containerの`securityContext`に`privileged: true`が設定されているコンテナでは、seccompプロファイルを適用することができません。
 特権コンテナは常に`Unconfined`な状態で動作します。
 {{< /note >}} 
 
 <!-- steps --> 
 
-## サンプルのseccompプロフィールをダウンロードする {#download-profiles}
+## サンプルのseccompプロファイルをダウンロードする {#download-profiles}
 
-プロフィールの内容は後で確認しますので、まずはクラスターで読み込むためのseccompプロフィールを`profiles/`ディレクトリ内にダウンロードしましょう。
+プロファイルの内容は後で確認しますので、まずはクラスターで読み込むためのseccompプロファイルを`profiles/`ディレクトリ内にダウンロードしましょう。
 
 {{< tabs name="tab_with_code" >}}
 {{< tab name="audit.json" >}}
@@ -73,7 +73,7 @@ curl -L -o profiles/fine-grained.json https://k8s.io/examples/pods/security/secc
 ls profiles
 ```
 
-最終的に３つのプロフィールが確認できるはずです:
+最終的に３つのプロファイルが確認できるはずです:
 ```
 audit.json  fine-grained.json  violation.json
 ```
@@ -95,8 +95,8 @@ curl -L -O https://k8s.io/examples/pods/security/seccomp/kind.yaml
 この設定方法の詳細については、kindのドキュメンテーションにおける[ノード](https://kind.sigs.k8s.io/docs/user/configuration/#nodes)の項目を参照してください。
 このチュートリアルではKubernetes {{< param "version" >}}を使用することを前提とします。
 
-ベータ機能として、`Unconfined`へのフォールバックを防ぐ目的で{{< glossary_tooltip text="container runtime" term_id="container-runtime" >}}が選んだデフォルトのseccompプロフィールを利用することもできます。
-この機能を試したい場合、これ以降の手順に進む前に、[全ワークロードに対するデフォルトのseccompプロフィールとして`RuntimeDefault`を使用する](#enable-the-use-of-runtimedefault-as-the-default-seccomp-profile-for-all-workloads)を参照してください。
+ベータ機能として、`Unconfined`へのフォールバックを防ぐ目的で{{< glossary_tooltip text="container runtime" term_id="container-runtime" >}}が選んだデフォルトのseccompプロファイルを利用することもできます。
+この機能を試したい場合、これ以降の手順に進む前に、[全ワークロードに対するデフォルトのseccompプロファイルとして`RuntimeDefault`を使用する](#enable-the-use-of-runtimedefault-as-the-default-seccomp-profile-for-all-workloads)を参照してください。
 
 kindの設定ファイルを設置したら、kindクラスターを作成します:
 
@@ -131,21 +131,21 @@ docker exec -it 6a96207fed4b ls /var/lib/kubelet/seccomp/profiles
 audit.json  fine-grained.json  violation.json
 ```
 
-kind内で稼働しているkubeletからseccompプロフィールが利用できる状態にあることを確認しました。
+kind内で稼働しているkubeletからseccompプロファイルが利用できる状態にあることを確認しました。
 
-## コンテナランタイムの標準seccompプロフィールを利用するPodを作成する
+## コンテナランタイムの標準seccompプロファイルを利用するPodを作成する
 
 ほとんどのコンテナランタイムは、何を許可し/何を拒否するかについての標準的なシステムコールの論理集合を提供しています。
 
-PodやContainerのセキュリティコンテキストでseccompタイプを`RuntimeDefault`に設定することにより、コンテナランタイムが提供するデフォルトのプロフィールを適用することができます。
+PodやContainerのセキュリティコンテキストでseccompタイプを`RuntimeDefault`に設定することにより、コンテナランタイムが提供するデフォルトのプロファイルを適用することができます。
 
 {{< note >}}
 `seccompDefault`の[設定](/docs/reference/config-api/kubelet-config.v1beta1/)を有効化している場合、
-他のseccompプロフィールが存在しない場合であってもPodは`RuntimeDefault`seccompプロフィールを使用します。
+他のseccompプロファイルが存在しない場合であってもPodは`RuntimeDefault`seccompプロファイルを使用します。
 `seccompDefault`が無効の場合のデフォルトは`Unconfined`です。
 {{< /note >}}
 
-Pod内の全てのContainerに対して`RuntimeDefault`seccompプロフィールを要求するマニフェストは次のようなものです:
+Pod内の全てのContainerに対して`RuntimeDefault`seccompプロファイルを要求するマニフェストは次のようなものです:
 
 {{% code_sample file="pods/security/seccomp/ga/default-pod.yaml" %}}
 
@@ -170,9 +170,9 @@ default-pod 1/1     Running   0          20s
 kubectl delete pod default-pod --wait --now
 ```
 
-## システムコール監査のためのseccompプロフィールを利用するPodを作成する
+## システムコール監査のためのseccompプロファイルを利用するPodを作成する
 
-最初に、新しいPodでプロセスの全システムコールを記録するための`audit.json`プロフィールを適用します。
+最初に、新しいPodでプロセスの全システムコールを記録するための`audit.json`プロファイルを適用します。
 
 このPodのためのマニフェストは次の通りです:
 
@@ -189,7 +189,7 @@ Kubernetes {{< skew currentVersion >}}におけるseccompの設定では`.spec.s
 kubectl apply -f https://k8s.io/examples/pods/security/seccomp/ga/audit-pod.yaml
 ```
 
-このプロフィールはシステムコールを禁止しませんので、Podは正常に起動するはずです。
+このプロファイルはシステムコールを禁止しませんので、Podは正常に起動するはずです。
 
 ```shell
 kubectl get pod audit-pod
@@ -256,7 +256,7 @@ Jul  6 15:38:40 my-machine kernel: [369188.671726] audit: type=1326 audit(159406
 
 
 各行の`syscall=`エントリに着目することで、`http-echo`プロセスが必要とするシステムコールを理解していくことができるでしょう。
-このプロセスが利用する全てのシステムコールをを網羅するものではなさそうですが、このコンテナのseccompプロフィールの基礎とすることが可能です。
+このプロセスが利用する全てのシステムコールをを網羅するものではなさそうですが、このコンテナのseccompプロファイルの基礎とすることが可能です。
 
 次のセクションに進む前にServiceとPodを削除します:
 
@@ -265,9 +265,9 @@ kubectl delete service audit-pod --wait
 kubectl delete pod audit-pod --wait --now
 ```
 
-## seccompプロフィールの侵害を引き起こすPodを作成する
+## seccompプロファイルの侵害を引き起こすPodを作成する
 
-デモとして、どのようなシステムコールも許可しないプロフィールをPodに適用してみましょう。
+デモとして、どのようなシステムコールも許可しないプロファイルをPodに適用してみましょう。
 
 このデモのためのマニフェストは次の通りです:
 
@@ -304,10 +304,10 @@ violation-pod   0/1     CrashLoopBackOff   1          6s
 kubectl delete pod violation-pod --wait --now
 ```
 
-## 必要なシステムコールのみを許可するseccompプロフィールを用いてPodを作成する
+## 必要なシステムコールのみを許可するseccompプロファイルを用いてPodを作成する
 
-`fine-grained.json`プロフィールの内容を確認すると、`"defaultAction":"SCMP_ACT_LOG"`を設定していた最初の例でsyslogに現れた、いくつかのシステムコールが含まれていることに気づくでしょう。
-今回のプロフィールでは`"defaultAction": "SCMP_ACT_ERRNO"`を設定していますが、`"action": "SCMP_ACT_ALLOW"`ブロックで明示的に一連のシステムコールを許可しています。
+`fine-grained.json`プロファイルの内容を確認すると、`"defaultAction":"SCMP_ACT_LOG"`を設定していた最初の例でsyslogに現れた、いくつかのシステムコールが含まれていることに気づくでしょう。
+今回のプロファイルでは`"defaultAction": "SCMP_ACT_ERRNO"`を設定していますが、`"action": "SCMP_ACT_ALLOW"`ブロックで明示的に一連のシステムコールを許可しています。
 理論上は、コンテナが正常に稼働することに加えて、`syslog`へのメッセージの送信は確認できないことになります。
 
 この事例で用いるマニフェストは次の通りです:
@@ -367,7 +367,7 @@ just made some syscalls!
 ```
 
 `syslog`には何も出力されないことを確認できるはずです。
-なぜなら、このプロフィールは必要な全てのシステムコールを許可しており、一覧にないシステムコールが呼び出された時にのみエラーを発生させるように構成しているためです。
+なぜなら、このプロファイルは必要な全てのシステムコールを許可しており、一覧にないシステムコールが呼び出された時にのみエラーを発生させるように構成しているためです。
 これはセキュリティの視点からすると理想的なシチュエーションといえますが、プログラムを解析するためにいくらかの労力を必要とします。
 たくさんの労力を割かなくても、これに近いセキュリティが得られるシンプルな手法があったら嬉しいですね。
 
@@ -378,57 +378,41 @@ kubectl delete service fine-pod --wait
 kubectl delete pod fine-pod --wait --now
 ```
 
-## 全ワークロードに対するデフォルトのseccompプロフィールとして`RuntimeDefault`を使用する
+## 全ワークロードに対するデフォルトのseccompプロファイルとして`RuntimeDefault`を使用する
 
 {{< feature-state state="stable" for_k8s_version="v1.27" >}}
 
-デフォルトのseccompプロフィールを利用するためには、この機能を利用したい全てのノードで`--seccomp-default`[コマンドラインフラグ](/docs/reference/command-line-tools-reference/kubelet)を用いてkubeletを起動する必要があります。
+デフォルトのseccompプロファイルを利用するためには、この機能を利用したい全てのノードで`--seccomp-default`[コマンドラインフラグ](/docs/reference/command-line-tools-reference/kubelet)を用いてkubeletを起動する必要があります。
 
-If enabled, the kubelet will use the `RuntimeDefault` seccomp profile by default, which is
-defined by the container runtime, instead of using the `Unconfined` (seccomp disabled) mode.
-The default profiles aim to provide a strong set
-of security defaults while preserving the functionality of the workload. It is
-possible that the default profiles differ between container runtimes and their
-release versions, for example when comparing those from CRI-O and containerd.
+この機能を有効化すると、kubeletはコンテナランタイムが定義する`RuntimeDefault`のseccompプロファイルをデフォルトで使用するようになり、`Unconfined`モード(seccomp無効化)になることはありません。
+この標準プロファイルは、ワークロードの機能をそのものを止めてしまうほどの、強力な標準セキュリティルールの束を提供することを目的としています。
+標準プロファイルはコンテナランタイムやリリースバージョンによって異なる可能性があります。
+例えば、CRI-Oとcontainerdで標準プロファイルを比較してみるとよいでしょう。
 
 {{< note >}}
-Enabling the feature will neither change the Kubernetes
-`securityContext.seccompProfile` API field nor add the deprecated annotations of
-the workload. This provides users the possibility to rollback anytime without
-actually changing the workload configuration. Tools like
-[`crictl inspect`](https://github.com/kubernetes-sigs/cri-tools) can be used to
-verify which seccomp profile is being used by a container.
+この機能を有効化しても、Kubernetesの`securityContext.seccompProfile`APIフィールドは変更されず、非推奨のアノテーションがワークロードに追加されることもありません。
+これにより、ユーザーはワークロードの設定変更なしでロールバックすることが可能となっています。
+[`crictl inspect`](https://github.com/kubernetes-sigs/cri-tools)のようなツールを使えば、コンテナが利用しているseccompプロファイルを確認できます。
 {{< /note >}}
 
-Some workloads may require a lower amount of syscall restrictions than others.
-This means that they can fail during runtime even with the `RuntimeDefault`
-profile. To mitigate such a failure, you can:
+いくつかのワークロードで、他のワークロードよりも少ない量のシステムコール制限のみの適用が必要な場合があります。
+つまり、`RuntimeDefault`を適用している場合であっても、これらのワークロードの実行は失敗する可能性があります。
+このような障害を緩和するために、次のような対策を講じることができます:
 
-- Run the workload explicitly as `Unconfined`.
-- Disable the `SeccompDefault` feature for the nodes. Also making sure that
-  workloads get scheduled on nodes where the feature is disabled.
-- Create a custom seccomp profile for the workload.
+- ワークロードを明示的に`Unconfined`として稼働させる。
+- `SeccompDefault`機能をノードで無効化する。
+また、機能を無効化したノードに対してワークロードが配置されていることを確認しておく。
+- ワークロードを対象とするカスタムseccompプロファイル作成する。
 
-If you were introducing this feature into production-like cluster, the Kubernetes project
-recommends that you enable this feature gate on a subset of your nodes and then
-test workload execution before rolling the change out cluster-wide.
+実運用環境に近いクラスターに対してこの機能を展開する場合、Kubernetesプロジェクトはクラスター全体に対して変更をロールアウトする前に、一部ノードのみを対象にしてこのフィーチャーゲートを有効化し、ワークロードの実行を検証しておくことをお勧めします。
 
-You can find more detailed information about a possible upgrade and downgrade strategy
-in the related Kubernetes Enhancement Proposal (KEP):
-[Enable seccomp by default](https://github.com/kubernetes/enhancements/tree/9a124fd29d1f9ddf2ff455c49a630e3181992c25/keps/sig-node/2413-seccomp-by-default#upgrade--downgrade-strategy).
+クラスターに対してとりうるアップグレード・ダウングレード戦略について更に詳細な情報について知りたい場合は、関連するKubernetes Enhancement Proposal (KEP)である[Enable seccomp by default](https://github.com/kubernetes/enhancements/tree/9a124fd29d1f9ddf2ff455c49a630e3181992c25/keps/sig-node/2413-seccomp-by-default#upgrade--downgrade-strategy)を参照してください。
 
-Kubernetes {{< skew currentVersion >}} lets you configure the seccomp profile
-that applies when the spec for a Pod doesn't define a specific seccomp profile.
-However, you still need to enable this defaulting for each node where you would
-like to use it.
+//FIXME: ？仕様／挙動要確認？Kubernetes {{< skew currentVersion >}}では、固有のseccompプロファイルが定義されていないPodのspecがある場合にのみ適用するseccompプロファイルを設定することができます。
+ただし、このデフォルト挙動を利用したい全てのノードでこの機能を有効化する必要があります。
 
-If you are running a Kubernetes {{< skew currentVersion >}} cluster and want to
-enable the feature, either run the kubelet with the `--seccomp-default` command
-line flag, or enable it through the [kubelet configuration
-file](/docs/tasks/administer-cluster/kubelet-config-file/). To enable the
-feature gate in [kind](https://kind.sigs.k8s.io), ensure that `kind` provides
-the minimum required Kubernetes version and enables the `SeccompDefault` feature
-[in the kind configuration](https://kind.sigs.k8s.io/docs/user/quick-start/#enable-feature-gates-in-your-cluster):
+稼働中のKubernetes {{< skew currentVersion >}}クラスターでこの機能を有効化したい場合、kubeletに`--seccomp-default`コマンドラインフラグを付与して起動するか、[Kubernetesの設定ファイル](/docs/tasks/administer-cluster/kubelet-config-file/)でこの機能を有効化する必要があります。
+[kind](https://kind.sigs.k8s.io)でこのフィーチャーゲートを有効化する場合、`kind`が最低限必要なKubernetesバージョンを満たしていて、かつ[kindの設定ファイル](https://kind.sigs.k8s.io/docs/user/quick-start/#enable-feature-gates-in-your-cluster)で`SeccompDefault`を有効化していることを確認してください:
 
 ```yaml
 kind: Cluster
@@ -452,15 +436,14 @@ nodes:
             seccomp-default: "true"
 ```
 
-If the cluster is ready, then running a pod:
+クラスターの準備ができたら、Podを走らせます:
 
 ```shell
 kubectl run --rm -it --restart=Never --image=alpine alpine -- sh
 ```
 
-Should now have the default seccomp profile attached. This can be verified by
-using `docker exec` to run `crictl inspect` for the container on the kind
-worker:
+このコマンドで標準のseccompプロファイルを紐付けられるはずです。
+この結果を確認するためには、kindワーカー上のコンテナを確認するために`docker exec`経由で`crictl inspect`を実行します:
 
 ```shell
 docker exec -it kind-worker bash -c \
@@ -481,7 +464,7 @@ docker exec -it kind-worker bash -c \
 
 ## {{% heading "whatsnext" %}}
 
-You can learn more about Linux seccomp:
+Linuxのseccompについて更に学びたい場合は、次の記事を参考にすると良いでしょう:
 
 * [A seccomp Overview](https://lwn.net/Articles/656307/)
 * [Seccomp Security Profiles for Docker](https://docs.docker.com/engine/security/seccomp/)
