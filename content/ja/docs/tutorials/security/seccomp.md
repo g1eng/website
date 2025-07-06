@@ -96,7 +96,7 @@ curl -L -O https://k8s.io/examples/pods/security/seccomp/kind.yaml
 このチュートリアルではKubernetes {{< param "version" >}}を使用することを前提とします。
 
 ベータ機能として、`Unconfined`へのフォールバックを防ぐ目的で{{< glossary_tooltip text="container runtime" term_id="container-runtime" >}}が選んだデフォルトのseccompプロフィールを利用することもできます。
-この機能を試したい場合、これ以降の手順に進む前に、[全ワークロードに対するデフォルトのseccompプロフィールとして`RuntimeDefault`を有効化する](#enable-the-use-of-runtimedefault-as-the-default-seccomp-profile-for-all-workloads)を参照してください。
+この機能を試したい場合、これ以降の手順に進む前に、[全ワークロードに対するデフォルトのseccompプロフィールとして`RuntimeDefault`を使用する](#enable-the-use-of-runtimedefault-as-the-default-seccomp-profile-for-all-workloads)を参照してください。
 
 kindの設定ファイルを設置したら、kindクラスターを作成します:
 
@@ -265,23 +265,22 @@ kubectl delete service audit-pod --wait
 kubectl delete pod audit-pod --wait --now
 ```
 
-## Create a Pod with a seccomp profile that causes violation
+## seccompプロフィールの侵害を引き起こすPodを作成する
 
-For demonstration, apply a profile to the Pod that does not allow for any
-syscalls.
+デモとして、どのようなシステムコールも許可しないプロフィールをPodに適用してみましょう。
 
-The manifest for this demonstration is:
+このデモのためのマニフェストは次の通りです:
 
 {{% code_sample file="pods/security/seccomp/ga/violation-pod.yaml" %}}
 
-Attempt to create the Pod in the cluster:
+クラスターにPodを作成してみます:
 
 ```shell
 kubectl apply -f https://k8s.io/examples/pods/security/seccomp/ga/violation-pod.yaml
 ```
 
-The Pod creates, but there is an issue.
-If you check the status of the Pod, you should see that it failed to start.
+Podを作成しても、問題が発生します。
+Podの状態を確認すると、起動に失敗していることが確認できるはずです。
 
 ```shell
 kubectl get pod violation-pod
@@ -292,32 +291,30 @@ NAME            READY   STATUS             RESTARTS   AGE
 violation-pod   0/1     CrashLoopBackOff   1          6s
 ```
 
-As seen in the previous example, the `http-echo` process requires quite a few
-syscalls. Here seccomp has been instructed to error on any syscall by setting
-`"defaultAction": "SCMP_ACT_ERRNO"`. This is extremely secure, but removes the
-ability to do anything meaningful. What you really want is to give workloads
-only the privileges they need.
 
-Delete the Pod before moving to the next section:
+直前の事例で見てきたように、`http-echo`プロセスはいくつかのシステムコールを必要とします。
+ここでは`"defaultAction": "SCMP_ACT_ERRNO"`が設定されているため、あらゆるシステムコールの発行でseccompがエラーを発生させました。。
+
+この構成はとてもセキュアですが、有意義なことは何もできないことを意味します。
+実際にやりたいことは、ワークロードが必要とする権限のみを与えることです。
+
+次のセクションに進む前にPodを削除します。
 
 ```shell
 kubectl delete pod violation-pod --wait --now
 ```
 
-## Create a Pod with a seccomp profile that only allows necessary syscalls
+## 必要なシステムコールのみを許可するseccompプロフィールを用いてPodを作成する
 
-If you take a look at the `fine-grained.json` profile, you will notice some of the syscalls
-seen in syslog of the first example where the profile set `"defaultAction":
-"SCMP_ACT_LOG"`. Now the profile is setting `"defaultAction": "SCMP_ACT_ERRNO"`,
-but explicitly allowing a set of syscalls in the `"action": "SCMP_ACT_ALLOW"`
-block. Ideally, the container will run successfully and you will see no messages
-sent to `syslog`.
+`fine-grained.json`プロフィールの内容を確認すると、`"defaultAction":"SCMP_ACT_LOG"`を設定していた最初の例でsyslogに現れた、いくつかのシステムコールが含まれていることに気づくでしょう。
+今回のプロフィールでは`"defaultAction": "SCMP_ACT_ERRNO"`を設定していますが、`"action": "SCMP_ACT_ALLOW"`ブロックで明示的に一連のシステムコールを許可しています。
+理論上は、コンテナが正常に稼働することに加えて、`syslog`へのメッセージの送信は確認できないことになります。
 
-The manifest for this example is:
+この事例で用いるマニフェストは次の通りです:
 
 {{% code_sample file="pods/security/seccomp/ga/fine-pod.yaml" %}}
 
-Create the Pod in your cluster:
+クラスタ内にPodを作成します:
 
 ```shell
 kubectl apply -f https://k8s.io/examples/pods/security/seccomp/ga/fine-pod.yaml
@@ -327,42 +324,41 @@ kubectl apply -f https://k8s.io/examples/pods/security/seccomp/ga/fine-pod.yaml
 kubectl get pod fine-pod
 ```
 
-The Pod should be showing as having started successfully:
+Podは正常に起動したことを示しているはずです:
 ```
 NAME        READY   STATUS    RESTARTS   AGE
 fine-pod   1/1     Running   0          30s
 ```
 
-Open up a new terminal window and use `tail` to monitor for log entries that
-mention calls from `http-echo`:
+新しいターミナルを開いて、`http-echo`からのシステムコールに関するログエントリを`tail`で監視しましょう:
 
 ```shell
-# The log path on your computer might be different from "/var/log/syslog"
+# あなたのマシンのログは"/var/log/syslog"以外の場所にあるかもしれません。
 tail -f /var/log/syslog | grep 'http-echo'
 ```
 
-Next, expose the Pod with a NodePort Service:
+次のPodをNodePort Serviceで公開します:
 
 ```shell
 kubectl expose pod fine-pod --type NodePort --port 5678
 ```
 
-Check what port the Service has been assigned on the node:
+どのポートがノード上のServiceに割り当てられたのかを確認します:
 
 ```shell
 kubectl get service fine-pod
 ```
 
-The output is similar to:
+出力は次のようになるでしょう:
 ```
 NAME        TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
 fine-pod    NodePort   10.111.36.142   <none>        5678:32373/TCP   72s
 ```
 
-Use `curl` to access that endpoint from inside the kind control plane container:
+kindのコントロールプレーンコンテナの内部から、`curl`を用いてエンドポイントにアクセスします:
 
 ```shell
-# Change 6a96207fed4b to the control plane container ID and 32373 to the port number you saw from "docker ps"
+# 6a96207fed4b をコントロールプレーンコンテナのIDに変更し、32373を"kubectl get service"で確認したポート番号に変更してください。
 docker exec -it 6a96207fed4b curl localhost:32373
 ```
 
@@ -370,27 +366,23 @@ docker exec -it 6a96207fed4b curl localhost:32373
 just made some syscalls!
 ```
 
-You should see no output in the `syslog`. This is because the profile allowed all
-necessary syscalls and specified that an error should occur if one outside of
-the list is invoked. This is an ideal situation from a security perspective, but
-required some effort in analyzing the program. It would be nice if there was a
-simple way to get closer to this security without requiring as much effort.
+`syslog`には何も出力されないことを確認できるはずです。
+なぜなら、このプロフィールは必要な全てのシステムコールを許可しており、一覧にないシステムコールが呼び出された時にのみエラーを発生させるように構成しているためです。
+これはセキュリティの視点からすると理想的なシチュエーションといえますが、プログラムを解析するためにいくらかの労力を必要とします。
+たくさんの労力を割かなくても、これに近いセキュリティが得られるシンプルな手法があったら嬉しいですね。
 
-Delete the Service and the Pod before moving to the next section:
+次のセクションに進む前にServiceとPodを削除します:
 
 ```shell
 kubectl delete service fine-pod --wait
 kubectl delete pod fine-pod --wait --now
 ```
 
-## Enable the use of `RuntimeDefault` as the default seccomp profile for all workloads
+## 全ワークロードに対するデフォルトのseccompプロフィールとして`RuntimeDefault`を使用する
 
 {{< feature-state state="stable" for_k8s_version="v1.27" >}}
 
-To use seccomp profile defaulting, you must run the kubelet with the
-`--seccomp-default`
-[command line flag](/docs/reference/command-line-tools-reference/kubelet)
-enabled for each node where you want to use it.
+デフォルトのseccompプロフィールを利用するためには、この機能を利用したい全てのノードで`--seccomp-default`[コマンドラインフラグ](/docs/reference/command-line-tools-reference/kubelet)を用いてkubeletを起動する必要があります。
 
 If enabled, the kubelet will use the `RuntimeDefault` seccomp profile by default, which is
 defined by the container runtime, instead of using the `Unconfined` (seccomp disabled) mode.
